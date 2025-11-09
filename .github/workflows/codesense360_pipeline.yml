@@ -1,75 +1,33 @@
-name: CodeSense360 Daily Pipeline
+name: CodeSense360 Cloud Pipeline
 
 on:
   schedule:
     - cron: "0 2 * * *"    # every day at 2 AM UTC
-  workflow_dispatch:        # allows manual run from Actions tab
+  workflow_dispatch:        # allow manual trigger
 
 jobs:
-  run-pipeline:
+  trigger-lambda:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: ${{ github.workspace }}
 
     steps:
-      # ✅ STEP 1: Checkout repo
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # ✅ STEP 2: Show repo contents (debug)
-      - name: Verify files
-        run: |
-          echo "Current working directory: $(pwd)"
-          echo "Repository content preview:"
-          ls -R | head -40
-
-      # ✅ STEP 3: Set up Python 3.11
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          python-version: "3.11"
-          cache: "pip"
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-2
 
-      # ✅ STEP 4: Install dependencies
-      - name: Install dependencies
+      - name: Invoke Lambda function
         run: |
-          python -m venv venv
-          source venv/bin/activate
-          pip install --upgrade pip
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          elif [ -f src/requirements.txt ]; then
-            pip install -r src/requirements.txt
-          else
-            echo "❌ requirements.txt not found in repo."
-            exit 1
-          fi
-
-      # ✅ STEP 5: Run ingestion jobs
-      - name: Run ingestion
-        env:
-          REPO_OWNER: ${{ secrets.REPO_OWNER }}
-          REPO_NAME: ${{ secrets.REPO_NAME }}
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: |
-          source venv/bin/activate
-          echo "🚀 Starting GitHub ingestion..."
-          python -m src.ingest.github_ingest
-          echo "⚙️  Running CI/CD ingestion..."
-          python -m src.ingest.cicd_ingest
-
-      # ✅ STEP 6: Run processing jobs
-      - name: Run processing
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_REGION }}
-        run: |
-          source venv/bin/activate
-          echo "🧮 Running metrics processors..."
-          python -m src.process.metrics_processor
-          python -m src.process.cicd_metrics_processor
+          echo "🚀 Triggering CodeSense360 Lambda function..."
+          aws lambda invoke \
+            --function-name codesense360_ingest_lambda \
+            --region us-east-2 \
+            --cli-binary-format raw-in-base64-out \
+            --payload '{"trigger": "github-scheduled"}' \
+            lambda_response.json
+          echo "✅ Lambda response:"
+          cat lambda_response.json
