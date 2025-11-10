@@ -123,6 +123,50 @@ from datetime import datetime, timedelta
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+import boto3
+from datetime import datetime
+
+# Initialize S3 client
+s3 = boto3.client("s3", region_name=os.getenv("AWS_REGION"))
+S3_BUCKET = "codesense360-data"
+INSIGHT_PREFIX = "weekly_insights/"
+
+def load_latest_insight_from_s3():
+    """Fetch the most recent AI insight JSON from S3."""
+    try:
+        # List all files under weekly_insights/
+        response = s3.list_objects_v2(Bucket=S3_BUCKET, Prefix=INSIGHT_PREFIX)
+        if "Contents" not in response:
+            st.warning("No weekly insights found yet.")
+            return None
+
+        # Sort by LastModified
+        latest = sorted(response["Contents"], key=lambda x: x["LastModified"], reverse=True)[0]
+        obj = s3.get_object(Bucket=S3_BUCKET, Key=latest["Key"])
+        content = json.loads(obj["Body"].read().decode("utf-8"))
+        return content
+    except Exception as e:
+        st.error(f"⚠️ Could not load insights: {e}")
+        return None
+
+
+def show_weekly_insight():
+    """Display the latest AI insight summary from S3."""
+    st.subheader("📅 Weekly AI Summary")
+
+    content = load_latest_insight_from_s3()
+    if not content:
+        st.info("No insights available yet. It will auto-update every Monday.")
+        return
+
+    timestamp = datetime.fromisoformat(content["timestamp"].replace("Z", ""))
+    st.caption(f"🕒 Generated on {timestamp.strftime('%b %d, %Y %H:%M UTC')}")
+    st.markdown(content["insights"])
+
+    # Optional: provide manual refresh
+    if st.button("🔄 Refresh from S3"):
+        st.rerun()
+
 def generate_ai_insights():
     """Auto-generate and persist AI-driven insights."""
     st.subheader("🤖 AI Insights")
