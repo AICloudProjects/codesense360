@@ -251,3 +251,7 @@ def generate_ai_insights():
 st.sidebar.divider()
 st.sidebar.markdown("### 🤖 AI Insights")
 generate_ai_insights()
+
+st.sidebar.divider()
+st.sidebar.markdown("### 📅 Weekly AI Summary")
+show_weekly_insight()
