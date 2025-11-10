@@ -3,11 +3,11 @@ import os
 import pandas as pd
 from datetime import datetime
 from dotenv import load_dotenv
-from src.ingest.s3_uploader import upload_to_s3   # reuse our uploader
+from src.ingest.s3_uploader import upload_to_s3
 
 load_dotenv()
 
-DATA_DIR = "data"
+DATA_DIR = "/tmp/data"  # ✅ Writable directory in Lambda
 
 def load_json(filename):
     path = os.path.join(DATA_DIR, filename)
@@ -32,41 +32,20 @@ def process_commits(commits):
     print("🧮 Commit metrics:", metrics)
     return df, metrics
 
-""" def process_pull_requests(prs):
-    df = pd.json_normalize(prs)
-    if not df.empty:
-        df["created_at"] = pd.to_datetime(df["created_at"])
-        df["closed_at"] = pd.to_datetime(df["closed_at"])
-        df["merged"] = df["merged_at"].notnull()
-        df["review_time_hours"] = (df["closed_at"] - df["created_at"]).dt.total_seconds() / 3600
-        metrics = {
-            "total_prs": len(df),
-            "merged_prs": df["merged"].sum(),
-            "avg_review_time_hours": df["review_time_hours"].mean(),
-        }
-        print("🧮 PR metrics:", metrics)
-    else:
-        metrics = {"total_prs": 0, "merged_prs": 0, "avg_review_time_hours": None}
-        print("⚠️ No PR data found.")
-    return df, metrics """
 
 def process_pull_requests(prs):
     df = pd.json_normalize(prs)
     if df.empty:
         print("⚠️ No PR data found.")
-        return df, {"total_prs": 0}
+        return df, {"total_prs": 0}, pd.DataFrame()
 
-    # parse dates
     df["created_at"] = pd.to_datetime(df["created_at"])
     df["closed_at"] = pd.to_datetime(df["closed_at"])
     df["merged_at"] = pd.to_datetime(df.get("merged_at"))
     df["author"] = df["user.login"]
     df["merged"] = df["merged_at"].notnull()
-    df["review_time_hours"] = (
-        df["closed_at"] - df["created_at"]
-    ).dt.total_seconds() / 3600
+    df["review_time_hours"] = (df["closed_at"] - df["created_at"]).dt.total_seconds() / 3600
 
-    # per-developer aggregates
     author_metrics = (
         df.groupby("author")
         .agg(
@@ -94,19 +73,30 @@ def save_processed(df, name):
     if df is None or df.empty:
         print(f"ℹ️ Skipping save: {name} is empty")
         return None
-    os.makedirs("data/processed", exist_ok=True)
-    file_path = f"data/processed/{name}.csv"
+
+    processed_dir = os.path.join(DATA_DIR, "processed")
+    os.makedirs(processed_dir, exist_ok=True)
+
+    file_path = os.path.join(processed_dir, f"{name}.csv")
     df.to_csv(file_path, index=False)
     print(f"💾 Saved processed data → {file_path}")
     upload_to_s3(file_path, s3_folder="processed/")
+
+    # ✅ Optional cleanup to free /tmp space
+    try:
+        os.remove(file_path)
+        print(f"🧹 Cleaned up temp file {file_path}")
+    except Exception as e:
+        print(f"⚠️ Cleanup failed: {e}")
+
     return file_path
+
 
 if __name__ == "__main__":
     commits = load_json("commits.json")
     prs = load_json("pull_requests_detailed.json")
 
     commit_df, commit_metrics = process_commits(commits)
-    #pr_df, pr_metrics = process_pull_requests(prs)
     pr_df, pr_metrics, author_metrics = process_pull_requests(prs)
 
     save_processed(commit_df, "commits_processed")
