@@ -51,6 +51,19 @@ jobs:
             --region ${{ secrets.AWS_REGION }}
           echo "S3_KEY=${S3_KEY}" >> $GITHUB_ENV
 
+      - name: 🔧 Update Lambda environment variables
+        run: |
+          aws lambda update-function-configuration \
+            --function-name codesense360_ingest_lambda \
+            --region ${{ secrets.AWS_REGION }} \
+            --environment "Variables={
+              GITHUB_TOKEN=${{ secrets.TOKEN }},
+              GITHUB_REPO_OWNER=${{ secrets.REPO_OWNER }},
+              GITHUB_REPO_NAME=${{ secrets.REPO_NAME }},
+              AWS_REGION=${{ secrets.AWS_REGION }}
+            }"
+
+
       - name: 🚀 Deploy Lambda from S3
         run: |
           aws lambda update-function-code \
