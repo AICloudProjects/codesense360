@@ -32,7 +32,6 @@ def process_commits(commits):
     print("🧮 Commit metrics:", metrics)
     return df, metrics
 
-
 def process_pull_requests(prs):
     df = pd.json_normalize(prs)
     if df.empty:
