@@ -1,0 +1,37 @@
+name: 🤖 Weekly AI Insights Automation
+
+on:
+  schedule:
+    - cron: "0 9 * * MON"   # every Monday 9 AM UTC
+  workflow_dispatch:         # allow manual trigger
+
+jobs:
+  generate-ai-insights:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 🧭 Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 📦 Install dependencies
+        run: |
+          pip install boto3 pandas openai pyyaml
+
+      - name: 🔐 Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: 🤖 Generate weekly AI insights
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
+        run: |
+          python dashboard/weekly_ai_insights.py
