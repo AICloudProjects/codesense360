@@ -81,6 +81,30 @@ def generate_summary():
     print("✅ Weekly AI Insights Generated:\n", insights)
     return insights
 
+import requests
+
+def post_to_teams(insights_text):
+    """Send insights to Microsoft Teams channel."""
+    webhook_url = os.getenv("TEAMS_WEBHOOK_URL")
+    if not webhook_url:
+        print("⚠️ No Teams webhook configured. Skipping message post.")
+        return
+
+    payload = {
+        "text": f"📅 **CodeSense360 Weekly AI Insights**\n\n{insights_text}"
+    }
+
+    try:
+        response = requests.post(webhook_url, json=payload)
+        if response.status_code == 200:
+            print("✅ Posted weekly insights to Microsoft Teams.")
+        else:
+            print(f"⚠️ Failed to post to Teams: {response.status_code} - {response.text}")
+    except Exception as e:
+        print(f"⚠️ Error posting to Teams: {e}")
+
+
+# After uploading to S3, call this function:
 if __name__ == "__main__":
     insights = generate_summary()
 
@@ -92,3 +116,7 @@ if __name__ == "__main__":
         ContentType="application/json"
     )
     print(f"📦 Saved to s3://{S3_BUCKET}/{output_key}")
+
+    # Post summary to Teams
+    post_to_teams(insights)
+
