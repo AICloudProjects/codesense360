@@ -23,11 +23,17 @@ jobs:
         run: |
           python -m venv venv
           source venv/bin/activate
-          pip install --upgrade pip
-          pip install --no-cache-dir -r requirements.txt -t build/
+          pip install --upgrade pip wheel
+          mkdir -p build
+          pip install --no-cache-dir --only-binary=:all: \
+            --platform manylinux2014_x86_64 \
+            --implementation cp \
+            --python-version 3.11 \
+            -r requirements.txt -t build/
           cp -r src build/src
           cp lambda_handler.py build/
           cd build && zip -r ../codesense360_lambda.zip .
+
 
       - name: 🔐 Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
