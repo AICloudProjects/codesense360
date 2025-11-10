@@ -4,7 +4,7 @@ from dotenv import load_dotenv
 from src.ingest.s3_uploader import upload_to_s3
 
 load_dotenv()
-DATA_DIR = "data"
+DATA_DIR = "/tmp/data"  # ✅ Writable directory in Lambda
 
 def load_json(filename):
     path = os.path.join(DATA_DIR, filename)
@@ -38,11 +38,21 @@ def save_processed(df, name):
     if df.empty:
         print("ℹ️ Skipping empty CI/CD dataset.")
         return
-    os.makedirs("data/processed", exist_ok=True)
-    file_path = f"data/processed/{name}.csv"
+    processed_dir = os.path.join(DATA_DIR, "processed")
+    os.makedirs(processed_dir, exist_ok=True)
+
+    file_path = os.path.join(processed_dir, f"{name}.csv")
     df.to_csv(file_path, index=False)
     print(f"💾 Saved → {file_path}")
     upload_to_s3(file_path, s3_folder="processed/")
+    
+    # ✅ Optional cleanup to save /tmp space
+    try:
+        os.remove(file_path)
+        print(f"🧹 Cleaned up temp file {file_path}")
+    except Exception as e:
+        print(f"⚠️ Cleanup failed: {e}")
+
     return file_path
 
 if __name__ == "__main__":
