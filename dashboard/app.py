@@ -5,6 +5,18 @@ import yaml
 import os
 from io import StringIO
 
+
+st.sidebar.write("🔑 AWS Key Found:", bool(os.getenv("AWS_ACCESS_KEY_ID")))
+st.sidebar.write("🌎 AWS Region:", os.getenv("AWS_REGION"))
+
+try:
+    sts = boto3.client("sts")
+    whoami = sts.get_caller_identity()
+    st.sidebar.success(f"✅ Connected as {whoami['Arn']}")
+except Exception as e:
+    st.sidebar.error(f"❌ AWS Connection failed: {e}")
+
+
 # --- Page setup ---
 st.set_page_config(page_title="CodeSense360 Dashboard", layout="wide")
 
