@@ -3,8 +3,8 @@ name: 🚀 CodeSense360 Lambda CI/CD
 on:
   push:
     branches:
-      - main        # or change to 'dev' if you want a staging branch
-  workflow_dispatch: # manual trigger
+      - main
+  workflow_dispatch:
 
 jobs:
   deploy-lambda:
@@ -19,7 +19,7 @@ jobs:
         with:
           python-version: "3.11"
 
-      - name: 📦 Install dependencies
+      - name: 📦 Build Lambda package
         run: |
           python -m venv venv
           source venv/bin/activate
@@ -36,12 +36,33 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: 🚀 Deploy to AWS Lambda
+      - name: 🚀 Upload Lambda zip to S3
+        run: |
+          TIMESTAMP=$(date +%Y%m%d%H%M%S)
+          S3_KEY="lambda_builds/codesense360_lambda_${TIMESTAMP}.zip"
+          echo "Uploading build to s3://codesense360-data/${S3_KEY}"
+          aws s3 cp codesense360_lambda.zip s3://codesense360-data/${S3_KEY} \
+            --region ${{ secrets.AWS_REGION }}
+          echo "S3_KEY=${S3_KEY}" >> $GITHUB_ENV
+
+      - name: 🚀 Deploy Lambda from S3
         run: |
           aws lambda update-function-code \
             --function-name codesense360_ingest_lambda \
-            --zip-file fileb://codesense360_lambda.zip \
+            --s3-bucket codesense360-data \
+            --s3-key ${{ env.S3_KEY }} \
             --region ${{ secrets.AWS_REGION }}
+
+      - name: 🧹 Keep only latest 3 Lambda zips
+        run: |
+          echo "Cleaning up old Lambda builds in S3..."
+          aws s3 ls s3://codesense360-data/lambda_builds/ --region ${{ secrets.AWS_REGION }} \
+            | sort -r \
+            | awk 'NR>3 {print $4}' \
+            | while read old_file; do
+                echo "Deleting old build: $old_file"
+                aws s3 rm s3://codesense360-data/lambda_builds/$old_file --region ${{ secrets.AWS_REGION }}
+              done
 
       - name: ✅ Test Lambda invocation
         run: |
