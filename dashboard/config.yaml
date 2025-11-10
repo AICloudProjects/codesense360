@@ -1,0 +1,7 @@
+project_name: CodeSense360
+description: Cloud Engineering Analytics Dashboard
+aws:
+  region: us-east-2
+  bucket: codesense360-data
+  athena_database: codesense360_db
+  athena_output: s3://codesense360-data/athena-query-results/
