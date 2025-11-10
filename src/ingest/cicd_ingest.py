@@ -12,7 +12,7 @@ REPO_OWNER   = os.getenv("GITHUB_REPO_OWNER")
 REPO_NAME    = os.getenv("GITHUB_REPO_NAME")
 HEADERS      = {"Authorization": f"token {GITHUB_TOKEN}"}
 
-DATA_DIR = "data"
+DATA_DIR = "/tmp/data"  # ✅ writable in AWS Lambda
 
 def fetch_workflow_runs(status="completed", per_page=50, max_pages=5):
     """Fetch recent workflow runs (builds) from GitHub Actions."""
@@ -32,12 +32,14 @@ def fetch_workflow_runs(status="completed", per_page=50, max_pages=5):
     return all_runs
 
 def save_to_local(data, filename):
+    """Save workflow run data locally in /tmp before uploading to S3."""
     os.makedirs(DATA_DIR, exist_ok=True)
     file_path = os.path.join(DATA_DIR, filename)
     with open(file_path, "w") as f:
         json.dump(data, f, indent=2)
     print(f"💾 Saved {len(data)} records → {file_path}")
     return file_path
+
 
 if __name__ == "__main__":
     runs = fetch_workflow_runs()
