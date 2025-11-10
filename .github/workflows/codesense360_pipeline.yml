@@ -1,33 +1,54 @@
-name: CodeSense360 Cloud Pipeline
+name: 🚀 CodeSense360 Lambda CI/CD
 
 on:
-  schedule:
-    - cron: "0 2 * * *"    # every day at 2 AM UTC
-  workflow_dispatch:        # allow manual trigger
+  push:
+    branches:
+      - main        # or change to 'dev' if you want a staging branch
+  workflow_dispatch: # manual trigger
 
 jobs:
-  trigger-lambda:
+  deploy-lambda:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: 📥 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials
+      - name: 🐍 Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 📦 Install dependencies
+        run: |
+          python -m venv venv
+          source venv/bin/activate
+          pip install --upgrade pip
+          pip install --no-cache-dir -r requirements.txt -t build/
+          cp -r src build/src
+          cp lambda_handler.py build/
+          cd build && zip -r ../codesense360_lambda.zip .
+
+      - name: 🔐 Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-2
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Invoke Lambda function
+      - name: 🚀 Deploy to AWS Lambda
         run: |
-          echo "🚀 Triggering CodeSense360 Lambda function..."
+          aws lambda update-function-code \
+            --function-name codesense360_ingest_lambda \
+            --zip-file fileb://codesense360_lambda.zip \
+            --region ${{ secrets.AWS_REGION }}
+
+      - name: ✅ Test Lambda invocation
+        run: |
           aws lambda invoke \
             --function-name codesense360_ingest_lambda \
-            --region us-east-2 \
             --cli-binary-format raw-in-base64-out \
-            --payload '{"trigger": "github-scheduled"}' \
+            --payload '{"trigger": "post-deploy"}' \
             lambda_response.json
-          echo "✅ Lambda response:"
+          echo "🔍 Lambda response:"
           cat lambda_response.json
