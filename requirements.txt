@@ -2,5 +2,3 @@ boto3
 requests
 python-dotenv
 pyyaml
-pandas
-numpy
