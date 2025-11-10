@@ -119,15 +119,15 @@ else:
 st.success("✅ Dashboard ready")
 
 import openai
+from datetime import datetime, timedelta
 
-# Initialize OpenAI client
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
-def generate_insights():
-    """Summarize the key trends in developer activity."""
-    st.subheader("🤖 AI Insights Generator")
+def generate_ai_insights():
+    """Auto-generate and persist AI-driven insights."""
+    st.subheader("🤖 AI Insights")
 
-    # Pull summarized metrics
+    # Load current metrics from Athena
     commits_df = run_query("""
         SELECT author_login AS author, COUNT(*) AS commits
         FROM commits_processed
@@ -150,37 +150,60 @@ def generate_insights():
         GROUP BY conclusion;
     """)
 
-    # Prepare summary text
-    summary_prompt = f"""
-    You are an engineering analytics assistant.
-    Summarize insights from the following GitHub data:
-    - Top Commit Authors: {commits_df.to_dict(orient='records')}
-    - Pull Request Summary: {pr_df.to_dict(orient='records')}
-    - CI/CD Run Status: {cicd_df.to_dict(orient='records')}
+    # Use previous summary if available
+    insights_cache = "dashboard/insights_cache.json"
+    cached = None
+    if os.path.exists(insights_cache):
+        with open(insights_cache, "r") as f:
+            cached = json.load(f)
+            st.info(f"🕒 Last generated: {cached['generated_at']}")
+            st.markdown(cached["insights"])
 
-    Generate a short executive summary with:
-    1. Team performance trends
-    2. Any anomalies (e.g. high review times or failed builds)
-    3. Suggestions for improvement
-    Limit to 150 words.
-    """
+    # Offer refresh option
+    if st.button("🔄 Refresh AI Insights"):
+        prompt = f"""
+        You are an analytics assistant for a DevOps productivity dashboard.
 
-    with st.spinner("🧠 Generating insights..."):
-        try:
-            response = openai.ChatCompletion.create(
-                model="gpt-4o-mini",
-                messages=[{"role": "user", "content": summary_prompt}],
-                max_tokens=300,
-                temperature=0.7
-            )
-            insights = response["choices"][0]["message"]["content"]
-            st.success("✅ Insights generated")
-            st.markdown(insights)
-        except Exception as e:
-            st.error(f"⚠️ Could not generate insights: {e}")
+        Using this week's GitHub and CI/CD data:
+        - Commits by author: {commits_df.to_dict(orient='records')}
+        - Pull Request Summary: {pr_df.to_dict(orient='records')}
+        - CI/CD Build Results: {cicd_df.to_dict(orient='records')}
 
-# Add tab or sidebar toggle
+        Compare these results with last week (if provided below), identify trends,
+        and produce a concise executive summary (<200 words) highlighting:
+        1️⃣ Developer performance trends
+        2️⃣ PR efficiency or delays
+        3️⃣ Build reliability
+        4️⃣ Key improvements or risks
+
+        Previous insights for context:
+        {cached["insights"] if cached else "No previous summary."}
+
+        Use emojis like 📈 for improvements and 📉 for regressions.
+        """
+
+        with st.spinner("🧠 Generating AI summary..."):
+            try:
+                response = openai.ChatCompletion.create(
+                    model="gpt-4o-mini",
+                    messages=[{"role": "user", "content": prompt}],
+                    temperature=0.6,
+                    max_tokens=400
+                )
+                insights = response["choices"][0]["message"]["content"]
+
+                # Display and cache
+                st.success("✅ Insights updated")
+                st.markdown(insights)
+                with open(insights_cache, "w") as f:
+                    json.dump({
+                        "generated_at": datetime.utcnow().isoformat(),
+                        "insights": insights
+                    }, f, indent=2)
+            except Exception as e:
+                st.error(f"⚠️ OpenAI request failed: {e}")
+
+# Sidebar persistent section
 st.sidebar.divider()
-if st.sidebar.button("🤖 Generate AI Insights"):
-    generate_insights()
-
+st.sidebar.markdown("### 🤖 AI Insights")
+generate_ai_insights()
