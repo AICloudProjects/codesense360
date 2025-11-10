@@ -117,3 +117,70 @@ else:
     st.bar_chart(df.set_index("conclusion"))
 
 st.success("✅ Dashboard ready")
+
+import openai
+
+# Initialize OpenAI client
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+def generate_insights():
+    """Summarize the key trends in developer activity."""
+    st.subheader("🤖 AI Insights Generator")
+
+    # Pull summarized metrics
+    commits_df = run_query("""
+        SELECT author_login AS author, COUNT(*) AS commits
+        FROM commits_processed
+        WHERE author_login IS NOT NULL
+        GROUP BY author
+        ORDER BY commits DESC
+        LIMIT 10;
+    """)
+
+    pr_df = run_query("""
+        SELECT author, total_prs, merged_prs, avg_review_time_hours
+        FROM author_pr_summary
+        ORDER BY merged_prs DESC
+        LIMIT 10;
+    """)
+
+    cicd_df = run_query("""
+        SELECT conclusion, COUNT(*) AS total
+        FROM workflow_runs_processed
+        GROUP BY conclusion;
+    """)
+
+    # Prepare summary text
+    summary_prompt = f"""
+    You are an engineering analytics assistant.
+    Summarize insights from the following GitHub data:
+    - Top Commit Authors: {commits_df.to_dict(orient='records')}
+    - Pull Request Summary: {pr_df.to_dict(orient='records')}
+    - CI/CD Run Status: {cicd_df.to_dict(orient='records')}
+
+    Generate a short executive summary with:
+    1. Team performance trends
+    2. Any anomalies (e.g. high review times or failed builds)
+    3. Suggestions for improvement
+    Limit to 150 words.
+    """
+
+    with st.spinner("🧠 Generating insights..."):
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": summary_prompt}],
+                max_tokens=300,
+                temperature=0.7
+            )
+            insights = response["choices"][0]["message"]["content"]
+            st.success("✅ Insights generated")
+            st.markdown(insights)
+        except Exception as e:
+            st.error(f"⚠️ Could not generate insights: {e}")
+
+# Add tab or sidebar toggle
+st.sidebar.divider()
+if st.sidebar.button("🤖 Generate AI Insights"):
+    generate_insights()
+
